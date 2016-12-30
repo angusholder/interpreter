@@ -1,7 +1,7 @@
 use std::iter::Peekable;
 use std::str::CharIndices;
 
-use parser::{ ParseResult, ParseError };
+use compiler::{ CompileResult, CompileError };
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Token {
@@ -33,9 +33,9 @@ pub enum Token {
 }
 
 pub struct Lexer<'a> {
-    pub iter: Peekable<CharIndices<'a>>,
+    iter: Peekable<CharIndices<'a>>,
     src: &'a str,
-    peeked: Option<Token>,
+    pub peeked: Option<Token>,
 }
 
 impl<'a> Lexer<'a> {
@@ -47,7 +47,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub fn peek(&mut self) -> ParseResult<&Token> {
+    pub fn peek(&mut self) -> CompileResult<&Token> {
         if self.peeked.is_none() {
             let next = self.next()?;
             self.peeked = Some(next);
@@ -56,7 +56,7 @@ impl<'a> Lexer<'a> {
         Ok(self.peeked.as_ref().unwrap())
     }
 
-    pub fn next(&mut self) -> ParseResult<Token> {
+    pub fn next(&mut self) -> CompileResult<Token> {
         if let Some(tok) = self.peeked.take() {
             return Ok(tok);
         }
@@ -69,7 +69,7 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        let (next_pos, next_char) = self.iter.next().ok_or(ParseError::EndOfStream)?;
+        let (next_pos, next_char) = self.iter.next().ok_or(CompileError::EndOfStream)?;
 
         use self::Token::*;
         let token = match next_char {
@@ -139,22 +139,22 @@ impl<'a> Lexer<'a> {
 
     // If this fails it is a hard parse error, which is why we don't care about
     // consuming the next token with .next()
-    pub fn expect(&mut self, token: Token) -> ParseResult<()> {
+    pub fn expect(&mut self, token: Token) -> CompileResult<()> {
         if self.peek() == Ok(&token) {
             self.next().unwrap(); // The if statement should make this impossible
             Ok(())
         } else {
-            Err(ParseError::Expected {
+            Err(CompileError::Expected {
                 expected: token,
                 got: self.next()?
             })
         }
     }
 
-    pub fn expect_ident(&mut self) -> ParseResult<String> {
+    pub fn expect_ident(&mut self) -> CompileResult<String> {
         match self.next()? {
             Token::Ident(ident) => Ok(ident),
-            got => Err(ParseError::Expected {
+            got => Err(CompileError::Expected {
                 expected: Token::Ident("_".to_string()),
                 got: got
             })

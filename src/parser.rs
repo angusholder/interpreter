@@ -1,18 +1,7 @@
 use lexer::{ Lexer, Token };
+use compiler::{ CompileResult, CompileError };
 
-#[derive(Debug, PartialEq)]
-pub enum ParseError {
-    Expected {
-        expected: Token,
-        got: Token
-    },
-    EndOfStream,
-    Unimplemented,
-}
-
-pub type ParseResult<T> = Result<T, ParseError>;
-
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum BinOpKind {
     Add,
     Sub,
@@ -20,7 +9,7 @@ pub enum BinOpKind {
     Div,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum UnaryOpKind {
     Neg,
 }
@@ -28,10 +17,11 @@ pub enum UnaryOpKind {
 #[derive(Debug)]
 pub enum AssignKind {
     Let,
-    Reassign,
+    LetAssign(Box<Expr>),
+    Reassign(Box<Expr>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Atom {
     Ident(String),
     Number(f64),
@@ -64,15 +54,13 @@ pub enum Stmt {
     Assign {
         kind: AssignKind,
         ident: String,
-        expr: Option<Box<Expr>>,
-
     },
     Expr(Box<Expr>),
 }
 
 #[derive(Debug)]
 pub struct Block {
-    stmts: Box<[Stmt]>,
+    pub stmts: Box<[Stmt]>,
 }
 
 pub struct Parser<'a> {
@@ -86,14 +74,14 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_brace_block(&mut self) -> ParseResult<Block> {
+    pub fn parse_brace_block(&mut self) -> CompileResult<Block> {
         self.lexer.expect(Token::LBrace)?;
         let block = self.parse_block()?;
         self.lexer.expect(Token::RBrace)?;
         Ok(block)
     }
 
-    pub fn parse_block(&mut self) -> ParseResult<Block> {
+    pub fn parse_block(&mut self) -> CompileResult<Block> {
         let mut result = Vec::<Stmt>::new();
         loop {
             match self.lexer.next() {
@@ -103,7 +91,6 @@ impl<'a> Parser<'a> {
                     if self.lexer.matches(Token::Semicolon) {
                         result.push(Stmt::Assign {
                             ident: ident,
-                            expr: None,
                             kind: AssignKind::Let,
                         })
                     } else {
@@ -113,8 +100,7 @@ impl<'a> Parser<'a> {
 
                         result.push(Stmt::Assign {
                             ident: ident,
-                            expr: Some(expr),
-                            kind: AssignKind::Let,
+                            kind: AssignKind::LetAssign(expr),
                         });
                     }
                 }
@@ -126,8 +112,7 @@ impl<'a> Parser<'a> {
 
                         result.push(Stmt::Assign {
                             ident: ident,
-                            expr: Some(expr),
-                            kind: AssignKind::Reassign,
+                            kind: AssignKind::Reassign(expr),
                         })
                     } else {
                         let node = Box::new(Expr::Atom(Atom::Ident(ident)));
@@ -152,13 +137,14 @@ impl<'a> Parser<'a> {
                 }
 
                 Ok(other) => {
-                    return Err(ParseError::Expected {
-                        got: other,
-                        expected: Token::KIf,
-                    });
+                    self.lexer.peeked = Some(other);
+                    let expr = self.parse_expr()?;
+                    self.lexer.expect(Token::Semicolon)?;
+
+                    result.push(Stmt::Expr(expr));
                 }
 
-                Err(ParseError::EndOfStream) => {
+                Err(CompileError::EndOfStream) => {
                     break;
                 }
 
@@ -173,7 +159,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_expr_with_initial_node(&mut self, initial: Box<Expr>) -> ParseResult<Box<Expr>> {
+    fn parse_expr_with_initial_node(&mut self, initial: Box<Expr>) -> CompileResult<Box<Expr>> {
         use lexer::Token::*;
         let mut root = initial;
 
@@ -184,7 +170,7 @@ impl<'a> Parser<'a> {
                 Ok(&Star) => BinOpKind::Mul,
                 Ok(&Slash) => BinOpKind::Div,
                 Ok(_) => return Ok(root),
-                Err(ParseError::EndOfStream) => return Ok(root),
+                Err(CompileError::EndOfStream) => return Ok(root),
                 Err(other) => {
                     return Err(other);
                 }
@@ -202,12 +188,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_expr(&mut self) -> ParseResult<Box<Expr>> {
+    pub fn parse_expr(&mut self) -> CompileResult<Box<Expr>> {
         let initial = self.parse_atom()?;
         self.parse_expr_with_initial_node(initial)
     }
 
-    pub fn parse_atom(&mut self) -> ParseResult<Box<Expr>> {
+    pub fn parse_atom(&mut self) -> CompileResult<Box<Expr>> {
         let atom = match self.lexer.next()? {
             Token::KTrue => Atom::Bool(true),
             Token::KFalse => Atom::Bool(false),
@@ -229,7 +215,7 @@ impl<'a> Parser<'a> {
                 return Ok(expr);
             }
 
-            _ => return Err(ParseError::Unimplemented),
+            _ => return Err(CompileError::Unimplemented),
         };
 
         Ok(Box::new(Expr::Atom(atom)))
