@@ -7,6 +7,12 @@ pub enum BinOpKind {
     Sub,
     Mul,
     Div,
+    Lt,
+    LtEq,
+    Gt,
+    GtEq,
+    Eq,
+    NotEq,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -51,6 +57,10 @@ pub enum Stmt {
         then: Block,
         els: Option<Block>,
     },
+    While {
+        cond: Box<Expr>,
+        body: Block,
+    },
     Assign {
         kind: AssignKind,
         ident: String,
@@ -85,6 +95,7 @@ impl<'a> Parser<'a> {
     pub fn parse_block(&mut self) -> CompileResult<Block> {
         let mut result = Vec::<Stmt>::new();
         loop {
+            if self.lexer.peek() == Ok(&Token::RBrace) { break; }
             match self.lexer.next() {
                 Ok(Token::KLet) => {
                     let ident = self.lexer.expect_ident()?;
@@ -137,19 +148,30 @@ impl<'a> Parser<'a> {
                     });
                 }
 
+                Ok(Token::KWhile) => {
+                    let cond = self.parse_expr()?;
+                    let body = self.parse_brace_block()?;
+
+                    result.push(Stmt::While {
+                        cond: cond,
+                        body: body,
+                    });
+                }
+
                 Ok(Token::KPrint) => {
                     let expr = self.parse_expr()?;
-                    self.lexer.expect(Token::Semicolon);
+                    self.lexer.expect(Token::Semicolon)?;
 
                     result.push(Stmt::Print(expr));
                 }
 
                 Ok(other) => {
-                    self.lexer.peeked = Some(other);
-                    let expr = self.parse_expr()?;
-                    self.lexer.expect(Token::Semicolon)?;
+                    panic!("Wtf is {:?}", other);
+                    // self.lexer.peeked = Some(other);
+                    // let expr = self.parse_expr()?;
+                    // self.lexer.expect(Token::Semicolon)?;
 
-                    result.push(Stmt::Expr(expr));
+                    // result.push(Stmt::Expr(expr));
                 }
 
                 Err(CompileError::EndOfStream) => {
@@ -177,6 +199,14 @@ impl<'a> Parser<'a> {
                 Ok(&Minus) => BinOpKind::Sub,
                 Ok(&Star) => BinOpKind::Mul,
                 Ok(&Slash) => BinOpKind::Div,
+
+                Ok(&Lt) => BinOpKind::Lt,
+                Ok(&LtEq) => BinOpKind::LtEq,
+                Ok(&Gt) => BinOpKind::Gt,
+                Ok(&GtEq) => BinOpKind::GtEq,
+                Ok(&Eq) => BinOpKind::Eq,
+                Ok(&NotEq) => BinOpKind::NotEq,
+
                 Ok(_) => return Ok(root),
                 Err(CompileError::EndOfStream) => return Ok(root),
                 Err(other) => {
@@ -223,7 +253,7 @@ impl<'a> Parser<'a> {
                 return Ok(expr);
             }
 
-            _ => return Err(CompileError::Unimplemented),
+            _ => panic!(),//return Err(CompileError::Unimplemented),
         };
 
         Ok(Box::new(Expr::Atom(atom)))

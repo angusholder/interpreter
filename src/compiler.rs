@@ -25,6 +25,8 @@ pub type CompileResult<T> = Result<T, CompileError>;
 
 #[derive(Clone, Copy)]
 struct JumpPatch(usize);
+#[derive(Clone, Copy)]
+struct BranchTarget(usize);
 
 pub struct Compiler {
     locals: HashMap<String, u16>,
@@ -107,6 +109,10 @@ impl Compiler {
         result
     }
 
+    fn save_branch_target(&self) -> BranchTarget {
+        BranchTarget(self.code.len())
+    }
+
     fn patch_jump(&mut self, patch: JumpPatch) -> CompileResult<()> {
         let cur = self.code.len();
         let branch_loc = patch.0;
@@ -123,6 +129,21 @@ impl Compiler {
                 Opcode::BranchFalse(_) => self.code[branch_loc] = Opcode::BranchFalse(diff),
                 _ => unreachable!(),
             }
+
+            Ok(())
+        }
+    }
+
+    fn emit_jump_to_target(&mut self, target: BranchTarget) -> CompileResult<()> {
+        let cur = self.code.len();
+        let BranchTarget(target) = target;
+        let diff = (target as isize) - (cur as isize);
+
+        if diff > (i16::max_value() as isize) || diff < (i16::min_value() as isize) {
+            Err(CompileError::BranchTooFar)
+        } else {
+            let diff = diff as i16;
+            self.emit(Opcode::Jump(diff));
 
             Ok(())
         }
@@ -164,6 +185,15 @@ impl Compiler {
                     }
                 }
 
+                &Stmt::While { ref cond, ref body } => {
+                    let target = self.save_branch_target();
+                    self.compile_expr(cond)?;
+                    let skip = self.emit_branch_false();
+                    self.compile_block(body)?;
+                    self.emit_jump_to_target(target)?;
+                    self.patch_jump(skip)?;
+                }
+
                 &Stmt::Expr(ref expr) => {
                     self.compile_expr(expr)?;
                     self.emit(Opcode::Pop);
@@ -190,6 +220,13 @@ impl Compiler {
                     BinOpKind::Sub => self.emit(Opcode::Sub),
                     BinOpKind::Mul => self.emit(Opcode::Mul),
                     BinOpKind::Div => self.emit(Opcode::Div),
+
+                    BinOpKind::Lt => self.emit(Opcode::Lt),
+                    BinOpKind::LtEq => self.emit(Opcode::LtEq),
+                    BinOpKind::Gt => self.emit(Opcode::Gt),
+                    BinOpKind::GtEq => self.emit(Opcode::GtEq),
+                    BinOpKind::Eq => self.emit(Opcode::Eq),
+                    BinOpKind::NotEq => self.emit(Opcode::NotEq),
                 }
             }
             &Expr::UnaryOp { kind, ref child } => {

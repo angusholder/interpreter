@@ -12,6 +12,7 @@ pub enum Token {
     KFalse,
     KNull,
     KPrint,
+    KWhile,
 
     LBrace,
     RBrace,
@@ -24,6 +25,13 @@ pub enum Token {
     Minus,
     Star,
     Slash,
+
+    Lt,
+    LtEq,
+    Gt,
+    GtEq,
+    Eq,
+    NotEq,
 
     Assign,
     Semicolon,
@@ -86,9 +94,33 @@ impl<'a> Lexer<'a> {
             '*' => Star,
             '/' => Slash,
 
-            '=' => Assign,
             ';' => Semicolon,
             ',' => Comma,
+
+            '=' => {
+                if let Some(&(_, '=')) = self.iter.peek() {
+                    self.iter.next();
+                    Eq
+                } else {
+                    Assign
+                }
+            }
+            '<' => {
+                if let Some(&(_, '=')) = self.iter.peek() {
+                    self.iter.next();
+                    LtEq
+                } else {
+                    Lt
+                }
+            }
+            '>' => {
+                if let Some(&(_, '='))  = self.iter.peek() {
+                    self.iter.next();
+                    GtEq
+                } else {
+                    Gt
+                }
+            }
 
             _ if next_char.is_numeric() => {
                 let start = next_pos;
@@ -129,6 +161,7 @@ impl<'a> Lexer<'a> {
                     "false" => KFalse,
                     "null" => KNull,
                     "print" => KPrint,
+                    "while" => KWhile,
                     ident => Ident(ident.to_string()),
                 }
             }

@@ -22,6 +22,13 @@ pub enum Opcode {
 
     Neg,
 
+    Lt,
+    LtEq,
+    Gt,
+    GtEq,
+    Eq,
+    NotEq,
+
     LoadConst(u16),
     LoadLocal(u16),
     StoreLocal(u16),
@@ -47,7 +54,7 @@ impl VirtualMachine {
             ($($pat:pat => $block:block)+) => {{
                 let _a = self.value_stack.pop().unwrap();
                 let _b = self.value_stack.pop().unwrap();
-                let _result = match (_a, _b) {
+                let _result = match (_b, _a) {
                     $($pat => $block)+,
                     _ => panic!("Invalid operands"),
                 };
@@ -68,25 +75,33 @@ impl VirtualMachine {
                 StoreLocal(idx) => {
                     locals[idx as usize] = self.value_stack.pop().unwrap();
                 }
+
                 BranchTrue(diff) => {
                     if self.value_stack.pop().unwrap().as_bool() {
                         pc = pc.wrapping_add((diff as isize) as usize);
+                    } else {
+                        pc = pc.wrapping_add(1);
                     }
                     continue;
                 }
                 BranchFalse(diff) => {
                     if !self.value_stack.pop().unwrap().as_bool() {
                         pc = pc.wrapping_add((diff as isize) as usize);
+                    } else {
+                        pc = pc.wrapping_add(1);
                     }
                     continue;
                 }
+
                 Jump(diff) => {
                     pc = pc.wrapping_add((diff as isize) as usize);
                     continue;
                 }
+
                 Pop => {
                     self.value_stack.pop().unwrap();
                 }
+
                 Add => match_binop! {
                     (Number(a), Number(b)) => { Number(a + b) }
                 },
@@ -102,6 +117,22 @@ impl VirtualMachine {
                         Number(a / b)
                     }
                 },
+
+                Lt =>   match_binop! { (Number(a), Number(b)) => { Bool(a < b) } },
+                LtEq => match_binop! { (Number(a), Number(b)) => { Bool(a <= b) } },
+                Gt =>   match_binop! { (Number(a), Number(b)) => { Bool(a > b) } },
+                GtEq => match_binop! { (Number(a), Number(b)) => { Bool(a >= b) } },
+                Eq => {
+                    let a = self.value_stack.pop().unwrap();
+                    let b = self.value_stack.pop().unwrap();
+                    self.value_stack.push(Bool(a == b));
+                }
+                NotEq => {
+                    let a = self.value_stack.pop().unwrap();
+                    let b = self.value_stack.pop().unwrap();
+                    self.value_stack.push(Bool(a != b));
+                }
+
                 Neg => {
                     if let Number(n) = self.value_stack.pop().unwrap() {
                         self.value_stack.push(Number(-n));
@@ -109,12 +140,16 @@ impl VirtualMachine {
                         panic!("Invalid operand type");
                     }
                 }
+
                 Print => {
                     println!("{:?}", self.value_stack.pop().unwrap());
                 }
 
                 Return => break,
             }
+
+            // println!("{:?}", op);
+            // println!("{:?}", self.value_stack);
 
             pc = pc.wrapping_add(1);
         }
