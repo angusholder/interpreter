@@ -56,6 +56,7 @@ pub enum Stmt {
         ident: String,
     },
     Expr(Box<Expr>),
+    Print(Box<Expr>),
 }
 
 #[derive(Debug)]
@@ -134,6 +135,13 @@ impl<'a> Parser<'a> {
                         then: then,
                         els: els
                     });
+                }
+
+                Ok(Token::KPrint) => {
+                    let expr = self.parse_expr()?;
+                    self.lexer.expect(Token::Semicolon);
+
+                    result.push(Stmt::Print(expr));
                 }
 
                 Ok(other) => {

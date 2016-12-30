@@ -51,3 +51,9 @@ impl Hash for Value {
         }
     }
 }
+
+impl Value {
+    pub fn as_bool(self) -> bool {
+        self != Value::Null && self != Value::Bool(false)
+    }
+}

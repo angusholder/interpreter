@@ -11,6 +11,7 @@ pub enum Token {
     KTrue,
     KFalse,
     KNull,
+    KPrint,
 
     LBrace,
     RBrace,
@@ -127,6 +128,7 @@ impl<'a> Lexer<'a> {
                     "true" => KTrue,
                     "false" => KFalse,
                     "null" => KNull,
+                    "print" => KPrint,
                     ident => Ident(ident.to_string()),
                 }
             }

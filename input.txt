@@ -1,4 +1,9 @@
-let a = 1;
-let b = 2;
-let answer = a + -(2*b);
-2*b;
+let a = 0;
+let b = 1;
+let temp;
+
+print a;
+temp = b;
+b = a + b;
+a = temp;
+

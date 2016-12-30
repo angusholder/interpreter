@@ -64,7 +64,7 @@ fn main() {
             let mut parser = Parser::new(Lexer::new(&program));
             let block = parser.parse_block().unwrap();
 
-            let compiled = compiler::compile(&block, &mut VirtualMachine{}).unwrap();
+            let compiled = compiler::compile(&block, &mut VirtualMachine::new()).unwrap();
 
             println!("locals: {:?}", compiled.local_names);
             println!("consts: {:?}", compiled.consts);
@@ -74,7 +74,13 @@ fn main() {
             }
         }
         "execute" => {
+            let mut parser = Parser::new(Lexer::new(&program));
+            let block = parser.parse_block().unwrap();
 
+            let mut vm = VirtualMachine::new();
+            let compiled = compiler::compile(&block, &mut vm).unwrap();
+
+            vm.execute(&compiled);
         }
         _ => unreachable!(), // Clap handles other cases
     }

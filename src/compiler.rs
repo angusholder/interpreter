@@ -4,7 +4,7 @@ use std::mem;
 use lexer::{ Token };
 use parser::{ Block, Stmt, Expr, AssignKind, BinOpKind, UnaryOpKind, Atom };
 use value::{ Value };
-use virtual_machine::VirtualMachine;
+use virtual_machine::{ Opcode, VirtualMachine };
 
 #[derive(Debug, PartialEq)]
 pub enum CompileError {
@@ -22,26 +22,6 @@ pub enum CompileError {
 }
 
 pub type CompileResult<T> = Result<T, CompileError>;
-
-#[derive(Debug)]
-pub enum Opcode {
-    Add,
-    Sub,
-    Mul,
-    Div,
-
-    Neg,
-
-    LoadConst(u16),
-    LoadLocal(u16),
-    StoreLocal(u16),
-
-    BranchTrue(i16),
-    BranchFalse(i16),
-    Jump(i16),
-
-    Pop,
-}
 
 #[derive(Clone, Copy)]
 struct JumpPatch(usize);
@@ -148,7 +128,7 @@ impl Compiler {
         }
     }
 
-    fn compile_block(&mut self, block: &Block) -> CompileResult<CompiledBlock> {
+    fn compile_block(&mut self, block: &Block) -> CompileResult<()> {
         for stmt in block.stmts.iter() {
             match stmt {
                 &Stmt::Assign { ref kind, ref ident } => {
@@ -188,19 +168,15 @@ impl Compiler {
                     self.compile_expr(expr)?;
                     self.emit(Opcode::Pop);
                 }
+
+                &Stmt::Print(ref expr) => {
+                    self.compile_expr(expr)?;
+                    self.emit(Opcode::Print);
+                }
             }
         }
 
-        let mut local_names = vec![String::new(); self.locals.len()];
-        for (name, idx) in self.locals.drain() {
-            local_names[idx as usize] = name;
-        }
-
-        Ok(CompiledBlock {
-            code: mem::replace(&mut self.code, Vec::new()).into_boxed_slice(),
-            consts: mem::replace(&mut self.consts, Vec::new()).into_boxed_slice(),
-            local_names: local_names.into_boxed_slice(),
-        })
+        Ok(())
     }
 
     fn compile_expr(&mut self, expr: &Expr) -> CompileResult<()> {
@@ -243,8 +219,24 @@ impl Compiler {
 
         Ok(())
     }
+
+    fn compile_main(&mut self, block: &Block) -> CompileResult<CompiledBlock> {
+        self.compile_block(block)?;
+        self.code.push(Opcode::Return);
+
+        let mut local_names = vec![String::new(); self.locals.len()];
+        for (name, idx) in self.locals.drain() {
+            local_names[idx as usize] = name;
+        }
+
+        Ok(CompiledBlock {
+            code: mem::replace(&mut self.code, Vec::new()).into_boxed_slice(),
+            consts: mem::replace(&mut self.consts, Vec::new()).into_boxed_slice(),
+            local_names: local_names.into_boxed_slice(),
+        })
+    }
 }
 
 pub fn compile(block: &Block, vm: &mut VirtualMachine) -> CompileResult<CompiledBlock> {
-    Compiler::new().compile_block(block)
+    Compiler::new().compile_main(block)
 }
