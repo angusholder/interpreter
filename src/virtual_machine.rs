@@ -142,7 +142,7 @@ impl VirtualMachine {
                 }
 
                 Print => {
-                    println!("{:?}", self.value_stack.pop().unwrap());
+                    println!("{}", self.value_stack.pop().unwrap());
                 }
 
                 Return => break,

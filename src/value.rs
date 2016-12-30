@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 use std::hash::{ Hash, Hasher };
 use std::mem;
+use std::fmt;
 
 pub enum HeapObjectKind {
-    String(String),
+    String(Box<str>),
     HashMap(HashMap<Value, Value>),
     List(Vec<Value>),
 }
@@ -20,6 +21,20 @@ pub enum Value {
     Bool(bool),
     Number(f64),
     HeapObject(*mut HeapObject),
+}
+
+impl fmt::Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Value::Null => write!(f, "null")?,
+            Value::Bool(true) => write!(f, "true")?,
+            Value::Bool(false) => write!(f, "false")?,
+            Value::Number(n) => write!(f, "{}", n)?,
+            Value::HeapObject(p) => write!(f, "{:p}", p)?,
+        }
+
+        Ok(())
+    }
 }
 
 impl Default for Value {
