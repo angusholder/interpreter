@@ -40,6 +40,7 @@ pub enum Token {
 
     Ident(String),
     Number(f64),
+    StrLit(String),
 }
 
 pub struct Lexer<'a> {
@@ -71,9 +72,20 @@ impl<'a> Lexer<'a> {
             return Ok(tok);
         }
 
-        while let Some(&(_, c)) = self.iter.peek() {
+        while let Some(&(idx, c)) = self.iter.peek() {
             if c.is_whitespace() {
                 self.iter.next();
+            } else if idx + 1 < self.src.len() && &self.src[idx..idx+2] == "//" {
+                self.iter.next();
+                self.iter.next();
+
+                loop {
+                    if let Some(&(_, '\n')) = self.iter.peek() {
+                        break;
+                    } else {
+                        self.iter.next();
+                    }
+                }
             } else {
                 break;
             }
@@ -94,22 +106,7 @@ impl<'a> Lexer<'a> {
             '-' => Minus,
             '*' => Star,
             '%' => Percent,
-            '/' => {
-                // if let Some(&(_, '/')) = self.iter.peek() {
-                //     // Skip line comment
-                //     self.iter.next();
-
-                //     let tail = self.src[next_pos+2..].as_bytes();
-                //     let mut i = 0;
-                //     while tail[i] != ('\n' as u8) {
-                //         i += 1;
-                //     }
-
-                //     self.iter = self.src[next_pos+2+i..].char_indices().peekable();
-                // } else {
-                // }
-                    Slash
-            }
+            '/' => Slash,
 
             ';' => Semicolon,
             ',' => Comma,
@@ -139,7 +136,30 @@ impl<'a> Lexer<'a> {
                 }
             }
 
-            _ if next_char.is_numeric() => {
+            '"' => {
+                let mut result = String::new();
+
+                while let Some((_, c)) = self.iter.next() {
+                    match c {
+                        '\\' => {
+                            match self.iter.next().ok_or(CompileError::UnterminatedStrLit)? {
+                                (_,'n') => result.push('\n'),
+                                (_,'t') => result.push('\t'),
+                                (_,'r') => result.push('\r'),
+                                _ => {
+                                    return Err(CompileError::InvalidStrLitEscape);
+                                }
+                            }
+                        }
+                        '"' => break,
+                        _ => result.push(c),
+                    }
+                }
+
+                StrLit(result)
+            }
+
+            _ if next_char.is_digit(10) => {
                 let start = next_pos;
                 let mut end = start + 1; // TODO: Check this
 

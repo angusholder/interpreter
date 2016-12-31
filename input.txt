@@ -1,15 +1,19 @@
+// foo index
 let i = 0;
+let s = "hello";
 
+// loop over [0,29]
 while i < 30 {
     if i % 15 == 0 {
-        print null;
+        print "foobar";
     } else if i % 3 == 0 {
-        print true;
+        print "foo";
     } else if i % 5 == 0 {
-        print false;
+        print "bar";
     } else {
         print i;
     }
 
     i = i + 1;
 }
+// end of program

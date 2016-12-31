@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::mem;
 
 use parser::{ Block, Stmt, Expr, AssignKind, BinOpKind, UnaryOpKind, Atom };
-use value::{ Value };
+use value::{ Value, HeapObjectKind };
 use virtual_machine::{ Opcode, VirtualMachine };
 
 #[derive(Debug, PartialEq)]
@@ -15,6 +15,8 @@ pub enum CompileError {
     UndeclaredLocal,
     BranchTooFar,
     TooManyConstants,
+    InvalidStrLitEscape,
+    UnterminatedStrLit,
 }
 
 pub type CompileResult<T> = Result<T, CompileError>;
@@ -24,10 +26,11 @@ struct JumpPatch(usize);
 #[derive(Clone, Copy)]
 struct BranchTarget(usize);
 
-pub struct Compiler {
+pub struct Compiler<'a> {
     locals: HashMap<String, u16>,
     code: Vec<Opcode>,
     consts: Vec<Value>,
+    vm: &'a mut VirtualMachine,
 }
 
 pub struct CompiledBlock {
@@ -36,12 +39,13 @@ pub struct CompiledBlock {
     pub local_names: Box<[String]>,
 }
 
-impl Compiler {
-    pub fn new() -> Compiler {
+impl<'a> Compiler<'a> {
+    pub fn new(vm: &mut VirtualMachine) -> Compiler {
         Compiler {
             locals: HashMap::new(),
             code: Vec::new(),
             consts: Vec::new(),
+            vm: vm,
         }
     }
 
@@ -257,6 +261,10 @@ impl Compiler {
                         let idx = self.fetch_local(ident)?;
                         self.emit(Opcode::LoadLocal(idx));
                     }
+                    &Atom::String(ref s) => {
+                        let value = self.vm.allocate_object(HeapObjectKind::String(s.clone().into_boxed_str()));
+                        self.emit_load_const(value)?;
+                    }
                 }
             }
         }
@@ -282,5 +290,5 @@ impl Compiler {
 }
 
 pub fn compile(block: &Block, vm: &mut VirtualMachine) -> CompileResult<CompiledBlock> {
-    Compiler::new().compile_main(block)
+    Compiler::new(vm).compile_main(block)
 }

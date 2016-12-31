@@ -1,16 +1,11 @@
-use value::Value;
+use std::ptr;
+
+use value::{ Value, HeapObject, HeapObjectKind };
 use compiler::CompiledBlock;
 
 pub struct VirtualMachine {
     value_stack: Vec<Value>,
-}
-
-impl VirtualMachine {
-    pub fn new() -> VirtualMachine {
-        VirtualMachine {
-            value_stack: Vec::new(),
-        }
-    }
+    pub next_object: *mut HeapObject,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -44,6 +39,13 @@ pub enum Opcode {
 }
 
 impl VirtualMachine {
+    pub fn new() -> VirtualMachine {
+        VirtualMachine {
+            value_stack: Vec::new(),
+            next_object: ptr::null_mut(),
+        }
+    }
+
     pub fn execute(&mut self, block: &CompiledBlock) {
         use self::Opcode::*;
         use value::Value::*;
@@ -160,5 +162,15 @@ impl VirtualMachine {
 
             pc = pc.wrapping_add(1);
         }
+    }
+
+    pub fn allocate_object(&mut self, obj_kind: HeapObjectKind) -> Value {
+        let obj = Box::into_raw(Box::new(HeapObject {
+            next: self.next_object,
+            marked: false,
+            kind: obj_kind
+        }));
+        self.next_object = obj;
+        Value::HeapObject(obj)
     }
 }

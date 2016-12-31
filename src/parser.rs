@@ -34,7 +34,7 @@ pub enum Atom {
     Number(f64),
     Bool(bool),
     Null,
-    // String(String)
+    String(String)
 }
 
 #[derive(Debug)]
@@ -249,6 +249,7 @@ impl<'a> Parser<'a> {
             Token::KNull => Atom::Null,
             Token::Number(n) => Atom::Number(n),
             Token::Ident(i) => Atom::Ident(i),
+            Token::StrLit(s) => Atom::String(s),
 
             Token::Minus => {
                 let atom = self.parse_atom()?;

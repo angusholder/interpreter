@@ -10,9 +10,9 @@ pub enum HeapObjectKind {
 }
 
 pub struct HeapObject {
-    next: *mut HeapObject,
-    marked: bool,
-    kind: HeapObjectKind,
+    pub next: *mut HeapObject,
+    pub marked: bool,
+    pub kind: HeapObjectKind,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -30,7 +30,15 @@ impl fmt::Display for Value {
             Value::Bool(true) => write!(f, "true")?,
             Value::Bool(false) => write!(f, "false")?,
             Value::Number(n) => write!(f, "{}", n)?,
-            Value::HeapObject(p) => write!(f, "{:p}", p)?,
+            Value::HeapObject(p) => {
+                let obj = unsafe { &*p };
+                match obj.kind {
+                    HeapObjectKind::String(ref s) => {
+                        write!(f, "{}", s)?;
+                    }
+                    _ => write!(f, "{:p}", p)?,
+                }
+            }
         }
 
         Ok(())
