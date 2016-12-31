@@ -6,6 +6,7 @@ pub enum BinOpKind {
     Add,
     Sub,
     Mul,
+    Rem,
     Div,
     Lt,
     LtEq,
@@ -52,10 +53,10 @@ pub enum Expr {
 
 #[derive(Debug)]
 pub enum Stmt {
-    IfStmt {
+    If {
         cond: Box<Expr>,
         then: Block,
-        els: Option<Block>,
+        els: Option<Box<Stmt>>, // Should be either `Block` or `If`
     },
     While {
         cond: Box<Expr>,
@@ -65,6 +66,7 @@ pub enum Stmt {
         kind: AssignKind,
         ident: String,
     },
+    Block(Block),
     Expr(Box<Expr>),
     Print(Box<Expr>),
 }
@@ -90,6 +92,26 @@ impl<'a> Parser<'a> {
         let block = self.parse_block()?;
         self.lexer.expect(Token::RBrace)?;
         Ok(block)
+    }
+
+    fn parse_if_stmt(&mut self) -> CompileResult<Stmt> {
+        let cond = self.parse_expr()?;
+        let then = self.parse_brace_block()?;
+        let els = if self.lexer.matches(Token::KElse) {
+            if self.lexer.matches(Token::KIf) {
+                Some(Box::new(self.parse_if_stmt()?))
+            } else {
+                Some(Box::new(Stmt::Block(self.parse_brace_block()?)))
+            }
+        } else {
+            None
+        };
+
+        Ok(Stmt::If {
+            cond: cond,
+            then: then,
+            els: els
+        })
     }
 
     pub fn parse_block(&mut self) -> CompileResult<Block> {
@@ -133,19 +155,7 @@ impl<'a> Parser<'a> {
                 }
 
                 Ok(Token::KIf) => {
-                    let cond = self.parse_expr()?;
-                    let then = self.parse_brace_block()?;
-                    let els = if self.lexer.matches(Token::KElse) {
-                        Some(self.parse_brace_block()?)
-                    } else {
-                        None
-                    };
-
-                    result.push(Stmt::IfStmt {
-                        cond: cond,
-                        then: then,
-                        els: els
-                    });
+                    result.push(self.parse_if_stmt()?);
                 }
 
                 Ok(Token::KWhile) => {
@@ -198,6 +208,7 @@ impl<'a> Parser<'a> {
                 Ok(&Plus) => BinOpKind::Add,
                 Ok(&Minus) => BinOpKind::Sub,
                 Ok(&Star) => BinOpKind::Mul,
+                Ok(&Percent) => BinOpKind::Rem,
                 Ok(&Slash) => BinOpKind::Div,
 
                 Ok(&Lt) => BinOpKind::Lt,

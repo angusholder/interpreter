@@ -18,6 +18,7 @@ pub enum Opcode {
     Add,
     Sub,
     Mul,
+    Rem,
     Div,
 
     Neg,
@@ -110,6 +111,12 @@ impl VirtualMachine {
                 },
                 Mul => match_binop! {
                     (Number(a), Number(b)) => { Number(a * b) }
+                },
+                Rem => match_binop! {
+                    (Number(a), Number(b)) => {
+                        assert!(b != 0.0);
+                        Number(a % b)
+                    }
                 },
                 Div => match_binop! {
                     (Number(a), Number(b)) => {

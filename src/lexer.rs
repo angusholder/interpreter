@@ -24,6 +24,7 @@ pub enum Token {
     Plus,
     Minus,
     Star,
+    Percent,
     Slash,
 
     Lt,
@@ -92,7 +93,23 @@ impl<'a> Lexer<'a> {
             '+' => Plus,
             '-' => Minus,
             '*' => Star,
-            '/' => Slash,
+            '%' => Percent,
+            '/' => {
+                // if let Some(&(_, '/')) = self.iter.peek() {
+                //     // Skip line comment
+                //     self.iter.next();
+
+                //     let tail = self.src[next_pos+2..].as_bytes();
+                //     let mut i = 0;
+                //     while tail[i] != ('\n' as u8) {
+                //         i += 1;
+                //     }
+
+                //     self.iter = self.src[next_pos+2+i..].char_indices().peekable();
+                // } else {
+                // }
+                    Slash
+            }
 
             ';' => Semicolon,
             ',' => Comma,
@@ -179,20 +196,18 @@ impl<'a> Lexer<'a> {
             self.next().unwrap(); // The if statement should make this impossible
             Ok(())
         } else {
-            Err(CompileError::Expected {
-                expected: token,
-                got: self.next()?
-            })
+            let msg = format!("got {:?}, expected {:?}", self.next()?, token);
+            Err(CompileError::Expected(msg))
         }
     }
 
     pub fn expect_ident(&mut self) -> CompileResult<String> {
         match self.next()? {
             Token::Ident(ident) => Ok(ident),
-            got => Err(CompileError::Expected {
-                expected: Token::Ident("_".to_string()),
-                got: got
-            })
+            got => {
+                let msg = format!("got {:?}, expected {:?}", got, "Ident");
+                Err(CompileError::Expected(msg))
+            }
         }
     }
 

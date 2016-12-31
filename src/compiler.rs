@@ -1,17 +1,13 @@
 use std::collections::HashMap;
 use std::mem;
 
-use lexer::{ Token };
 use parser::{ Block, Stmt, Expr, AssignKind, BinOpKind, UnaryOpKind, Atom };
 use value::{ Value };
 use virtual_machine::{ Opcode, VirtualMachine };
 
 #[derive(Debug, PartialEq)]
 pub enum CompileError {
-    Expected {
-        expected: Token,
-        got: Token
-    },
+    Expected(String),
     EndOfStream,
     Unimplemented,
     TooManyLocals,
@@ -149,61 +145,71 @@ impl Compiler {
         }
     }
 
-    fn compile_block(&mut self, block: &Block) -> CompileResult<()> {
-        for stmt in block.stmts.iter() {
-            match stmt {
-                &Stmt::Assign { ref kind, ref ident } => {
-                    match kind {
-                        &AssignKind::Let => {
-                            self.declare_local(ident)?;
-                        }
-                        &AssignKind::LetAssign(ref expr) => {
-                            self.compile_expr(expr)?;
-                            let idx = self.declare_local(ident)?;
-                            self.emit(Opcode::StoreLocal(idx));
-                        }
-                        &AssignKind::Reassign(ref expr) => {
-                            self.compile_expr(expr)?;
-                            let idx = self.fetch_local(ident)?;
-                            self.emit(Opcode::StoreLocal(idx));
-                        }
+    fn compile_stmt(&mut self, stmt: &Stmt) -> CompileResult<()> {
+        match stmt {
+            &Stmt::Assign { ref kind, ref ident } => {
+                match kind {
+                    &AssignKind::Let => {
+                        self.declare_local(ident)?;
                     }
-                }
-
-                &Stmt::IfStmt { ref cond, ref then, ref els } => {
-                    self.compile_expr(cond)?;
-                    let if_not = self.emit_branch_false();
-                    self.compile_block(then)?;
-
-                    if let &Some(ref els) = els {
-                        let jump_to_end = self.emit_jump();
-                        self.patch_jump(if_not)?;
-                        self.compile_block(els)?;
-                        self.patch_jump(jump_to_end)?;
-                    } else {
-                        self.patch_jump(if_not)?;
+                    &AssignKind::LetAssign(ref expr) => {
+                        self.compile_expr(expr)?;
+                        let idx = self.declare_local(ident)?;
+                        self.emit(Opcode::StoreLocal(idx));
                     }
-                }
-
-                &Stmt::While { ref cond, ref body } => {
-                    let target = self.save_branch_target();
-                    self.compile_expr(cond)?;
-                    let skip = self.emit_branch_false();
-                    self.compile_block(body)?;
-                    self.emit_jump_to_target(target)?;
-                    self.patch_jump(skip)?;
-                }
-
-                &Stmt::Expr(ref expr) => {
-                    self.compile_expr(expr)?;
-                    self.emit(Opcode::Pop);
-                }
-
-                &Stmt::Print(ref expr) => {
-                    self.compile_expr(expr)?;
-                    self.emit(Opcode::Print);
+                    &AssignKind::Reassign(ref expr) => {
+                        self.compile_expr(expr)?;
+                        let idx = self.fetch_local(ident)?;
+                        self.emit(Opcode::StoreLocal(idx));
+                    }
                 }
             }
+
+            &Stmt::If { ref cond, ref then, ref els } => {
+                self.compile_expr(cond)?;
+                let if_not = self.emit_branch_false();
+                self.compile_block(then)?;
+
+                if let &Some(ref els) = els {
+                    let jump_to_end = self.emit_jump();
+                    self.patch_jump(if_not)?;
+                    self.compile_stmt(els)?;
+                    self.patch_jump(jump_to_end)?;
+                } else {
+                    self.patch_jump(if_not)?;
+                }
+            }
+
+            &Stmt::While { ref cond, ref body } => {
+                let target = self.save_branch_target();
+                self.compile_expr(cond)?;
+                let skip = self.emit_branch_false();
+                self.compile_block(body)?;
+                self.emit_jump_to_target(target)?;
+                self.patch_jump(skip)?;
+            }
+
+            &Stmt::Block(ref block) => {
+                self.compile_block(block)?;
+            }
+
+            &Stmt::Expr(ref expr) => {
+                self.compile_expr(expr)?;
+                self.emit(Opcode::Pop);
+            }
+
+            &Stmt::Print(ref expr) => {
+                self.compile_expr(expr)?;
+                self.emit(Opcode::Print);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn compile_block(&mut self, block: &Block) -> CompileResult<()> {
+        for stmt in block.stmts.iter() {
+            self.compile_stmt(stmt)?;
         }
 
         Ok(())
@@ -219,6 +225,7 @@ impl Compiler {
                     BinOpKind::Add => self.emit(Opcode::Add),
                     BinOpKind::Sub => self.emit(Opcode::Sub),
                     BinOpKind::Mul => self.emit(Opcode::Mul),
+                    BinOpKind::Rem => self.emit(Opcode::Rem),
                     BinOpKind::Div => self.emit(Opcode::Div),
 
                     BinOpKind::Lt => self.emit(Opcode::Lt),

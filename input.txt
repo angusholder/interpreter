@@ -1,12 +1,15 @@
-let a = 0;
-let b = 1;
-let temp;
 let i = 0;
 
-while i < 20 {
-    print a;
-    temp = b;
-    b = a + b;
-    a = temp;
+while i < 30 {
+    if i % 15 == 0 {
+        print null;
+    } else if i % 3 == 0 {
+        print true;
+    } else if i % 5 == 0 {
+        print false;
+    } else {
+        print i;
+    }
+
     i = i + 1;
 }
