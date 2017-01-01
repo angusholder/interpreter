@@ -3,10 +3,13 @@ use std::hash::{ Hash, Hasher };
 use std::mem;
 use std::fmt;
 
+use compiler::CompiledBlock;
+
 pub enum HeapObjectKind {
     String(Box<str>),
     HashMap(HashMap<Value, Value>),
     List(Vec<Value>),
+    Function(CompiledBlock),
 }
 
 pub struct HeapObject {
@@ -15,12 +18,34 @@ pub struct HeapObject {
     pub kind: HeapObjectKind,
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum Value {
     Null,
     Bool(bool),
     Number(f64),
     HeapObject(*mut HeapObject),
+}
+
+impl fmt::Debug for Value {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Value::Null => write!(f, "null")?,
+            Value::Bool(true) => write!(f, "true")?,
+            Value::Bool(false) => write!(f, "false")?,
+            Value::Number(n) => write!(f, "{}", n)?,
+            Value::HeapObject(p) => {
+                let obj = unsafe { &*p };
+                match obj.kind {
+                    HeapObjectKind::String(ref s) => write!(f, "String(\"{}\")", s)?,
+                    HeapObjectKind::Function(ref func) => write!(f, "Function({}:{:p})", func.name, p)?,
+                    HeapObjectKind::List(_) => write!(f, "List({:p})", p)?,
+                    HeapObjectKind::HashMap(_) => write!(f, "HashMap({:p})", p)?,
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl fmt::Display for Value {
@@ -33,10 +58,10 @@ impl fmt::Display for Value {
             Value::HeapObject(p) => {
                 let obj = unsafe { &*p };
                 match obj.kind {
-                    HeapObjectKind::String(ref s) => {
-                        write!(f, "{}", s)?;
-                    }
-                    _ => write!(f, "{:p}", p)?,
+                    HeapObjectKind::String(ref s) => write!(f, "{}", s)?,
+                    HeapObjectKind::Function(ref func) => write!(f, "Function({}:{:p})", func.name, p)?,
+                    HeapObjectKind::List(_) => write!(f, "List({:p})", p)?,
+                    HeapObjectKind::HashMap(_) => write!(f, "HashMap({:p})", p)?,
                 }
             }
         }

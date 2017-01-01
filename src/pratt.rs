@@ -99,7 +99,7 @@ const COMMA_PREC: i32 = 1;
 fn left_func_call(p: &mut Parser, _token: Token, left: Box<Expr>, _rbp: i32) -> CompileResult<Box<Expr>> {
     // TODO: Ensure left is callable (eg: only Index/Ident/Attr/...?)
     let mut args = Vec::new();
-    if p.lexer.peek() != Ok(&Token::RParen) {
+    if !p.lexer.matches(Token::RParen) {
         loop {
             args.push(p.parse_expr_until(COMMA_PREC)?);
             if p.lexer.matches(Token::RParen) {

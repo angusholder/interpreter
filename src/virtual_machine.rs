@@ -1,10 +1,18 @@
 use std::ptr;
+use std::mem;
 
 use value::{ Value, HeapObject, HeapObjectKind };
 use compiler::CompiledBlock;
 
+pub struct CallInfo {
+    locals: Box<[Value]>,
+    pc: usize,
+    func: *const CompiledBlock,
+}
+
 pub struct VirtualMachine {
     value_stack: Vec<Value>,
+    call_stack: Vec<CallInfo>,
     pub next_object: *mut HeapObject,
 }
 
@@ -36,22 +44,25 @@ pub enum Opcode {
     Pop,
     Return,
     Print,
+    Call(u8),
 }
 
 impl VirtualMachine {
     pub fn new() -> VirtualMachine {
         VirtualMachine {
             value_stack: Vec::new(),
+            call_stack: Vec::new(),
             next_object: ptr::null_mut(),
         }
     }
 
-    pub fn execute(&mut self, block: &CompiledBlock) {
+    pub fn execute(&mut self, initial_block: *const CompiledBlock) {
         use self::Opcode::*;
         use value::Value::*;
 
         let mut pc = 0usize;
-        let mut locals = vec![Value::Null; block.local_names.len()];
+        let mut func: &CompiledBlock = unsafe { &*initial_block };
+        let mut locals = vec![Value::Null; func.local_names.len()].into_boxed_slice();
 
         macro_rules! match_binop {
             ($($pat:pat => $block:block)+) => {{
@@ -66,11 +77,14 @@ impl VirtualMachine {
         }
 
         loop {
-            let op = block.code[pc];
+            let op = func.code[pc];
+
+            // println!("    {:?}", self.value_stack);
+            // println!("{:?}", op);
 
             match op {
                 LoadConst(idx) => {
-                    self.value_stack.push(block.consts[idx as usize]);
+                    self.value_stack.push(func.consts[idx as usize]);
                 }
                 LoadLocal(idx) => {
                     self.value_stack.push(locals[idx as usize]);
@@ -127,9 +141,9 @@ impl VirtualMachine {
                     }
                 },
 
-                Lt =>   match_binop! { (Number(a), Number(b)) => { Bool(a < b) } },
+                Lt =>   match_binop! { (Number(a), Number(b)) => { Bool(a < b)  } },
                 LtEq => match_binop! { (Number(a), Number(b)) => { Bool(a <= b) } },
-                Gt =>   match_binop! { (Number(a), Number(b)) => { Bool(a > b) } },
+                Gt =>   match_binop! { (Number(a), Number(b)) => { Bool(a > b)  } },
                 GtEq => match_binop! { (Number(a), Number(b)) => { Bool(a >= b) } },
                 Eq => {
                     let a = self.value_stack.pop().unwrap();
@@ -154,11 +168,57 @@ impl VirtualMachine {
                     println!("{}", self.value_stack.pop().unwrap());
                 }
 
-                Return => break,
-            }
+                Return => {
+                    if let Some(call_info) = self.call_stack.pop() {
+                        func = unsafe { &*call_info.func };
+                        locals = call_info.locals;
+                        pc = call_info.pc;
+                    } else {
+                        break;
+                    }
+                }
 
-            // println!("{:?}", op);
-            // println!("{:?}", self.value_stack);
+                Call(arg_count) => {
+                    let arg_count = arg_count as usize;
+
+                    let func_idx = self.value_stack.len() - arg_count - 1;
+                    let func_val = self.value_stack[func_idx];
+
+                    let old_func = func;
+
+                    func = if let Value::HeapObject(p) = func_val {
+                        let obj = unsafe { &*p };
+                        if let HeapObjectKind::Function(ref func) = obj.kind {
+                            func
+                        } else {
+                            panic!("Tried to call uncallable value {:?}", func_val);
+                        }
+                    } else {
+                        panic!("Tried to call uncallable value {:?}", func_val);
+                    };
+
+                    let mut new_locals = vec![Value::Null; func.local_names.len()].into_boxed_slice();
+
+                    for i in 0..arg_count {
+                        new_locals[i] = self.value_stack[func_idx + 1 + i];
+                    }
+
+                    for _ in 0..arg_count+1 {
+                        self.value_stack.pop();
+                    }
+
+                    let old_locals = mem::replace(&mut locals, new_locals);
+
+                    self.call_stack.push(CallInfo {
+                        pc: pc,
+                        locals: old_locals,
+                        func: old_func,
+                    });
+
+                    pc = 0;
+                    continue;
+                }
+            }
 
             pc = pc.wrapping_add(1);
         }

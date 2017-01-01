@@ -18,6 +18,7 @@ pub enum CompileError {
     InvalidStrLitEscape,
     UnterminatedStrLit,
     UnexpectedNullToken(String),
+    TooManyArguments,
 }
 
 pub type CompileResult<T> = Result<T, CompileError>;
@@ -34,7 +35,9 @@ pub struct Compiler<'a> {
     vm: &'a mut VirtualMachine,
 }
 
+#[derive(Debug)]
 pub struct CompiledBlock {
+    pub name: String,
     pub code: Box<[Opcode]>,
     pub consts: Box<[Value]>,
     pub local_names: Box<[String]>,
@@ -208,6 +211,29 @@ impl<'a> Compiler<'a> {
                 self.compile_expr(expr)?;
                 self.emit(Opcode::Print);
             }
+
+            &Stmt::Function { ref name, ref args, ref body } => {
+                let func = {
+                    let mut locals = HashMap::<String, u16>::new();
+                    for (i, arg) in args.iter().enumerate() {
+                        locals.insert(arg.clone(), i as u16);
+                    }
+
+                    let mut compiler = Compiler {
+                        vm: self.vm,
+                        locals: locals,
+                        code: Vec::new(),
+                        consts: Vec::new(),
+                    };
+
+                    compiler.compile_main(body, name)?
+                };
+
+                let func_val = self.vm.allocate_object(HeapObjectKind::Function(func));
+                self.emit_load_const(func_val)?;
+                let local_idx = self.declare_local(name)?;
+                self.emit(Opcode::StoreLocal(local_idx));
+            }
         }
 
         Ok(())
@@ -269,14 +295,28 @@ impl<'a> Compiler<'a> {
                     }
                 }
             }
-            _ => {}
+            &Expr::FuncCall { ref left, ref args } => {
+                let arg_count = if args.len() > (u8::max_value() as usize) {
+                    return Err(CompileError::TooManyArguments);
+                } else {
+                    args.len() as u8
+                };
+
+                self.compile_expr(left)?;
+                for arg in args.iter() {
+                    self.compile_expr(arg)?;
+                }
+                self.emit(Opcode::Call(arg_count));
+            }
+            &Expr::Index{..} | &Expr::Attr{..} => unreachable!(),
         }
 
         Ok(())
     }
 
-    fn compile_main(&mut self, block: &Block) -> CompileResult<CompiledBlock> {
+    fn compile_main(&mut self, block: &Block, name: &str) -> CompileResult<CompiledBlock> {
         self.compile_block(block)?;
+        self.emit_load_const(Value::Null)?;
         self.code.push(Opcode::Return);
 
         let mut local_names = vec![String::new(); self.locals.len()];
@@ -285,6 +325,7 @@ impl<'a> Compiler<'a> {
         }
 
         Ok(CompiledBlock {
+            name: name.to_string(),
             code: mem::replace(&mut self.code, Vec::new()).into_boxed_slice(),
             consts: mem::replace(&mut self.consts, Vec::new()).into_boxed_slice(),
             local_names: local_names.into_boxed_slice(),
@@ -293,5 +334,5 @@ impl<'a> Compiler<'a> {
 }
 
 pub fn compile(block: &Block, vm: &mut VirtualMachine) -> CompileResult<CompiledBlock> {
-    Compiler::new(vm).compile_main(block)
+    Compiler::new(vm).compile_main(block, "<main>")
 }

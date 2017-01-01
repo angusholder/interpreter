@@ -78,6 +78,11 @@ pub enum Stmt {
         kind: AssignKind,
         left: Box<Expr>,
     },
+    Function {
+        name: String,
+        args: Box<[String]>,
+        body: Block,
+    },
     Block(Block),
     Expr(Box<Expr>),
     Print(Box<Expr>),
@@ -163,6 +168,7 @@ impl<'a> Parser<'a> {
                             kind: AssignKind::Reassign(expr),
                         })
                     } else {
+                        self.lexer.expect(Token::Semicolon)?;
                         result.push(Stmt::Expr(left));
                     }
                 }
@@ -181,12 +187,42 @@ impl<'a> Parser<'a> {
                     });
                 }
 
+                Ok(Token::KFn) => {
+                    let name = self.lexer.expect_ident()?;
+                    self.lexer.expect(Token::LParen)?;
+                    let mut args = Vec::<String>::new();
+
+                    if !self.lexer.matches(Token::RParen) {
+                        if let &Token::Ident(_) = self.lexer.peek()? {
+                            args.push(self.lexer.expect_ident()?);
+                            loop {
+                                if self.lexer.matches(Token::RParen) {
+                                    break;
+                                } else {
+                                    self.lexer.expect(Token::Comma)?;
+                                    args.push(self.lexer.expect_ident()?);
+                                }
+                            }
+                        }
+                    }
+
+                    let body = self.parse_brace_block()?;
+
+                    result.push(Stmt::Function {
+                        name: name,
+                        args: args.into_boxed_slice(),
+                        body: body,
+                    });
+                }
+
                 Ok(Token::KPrint) => {
                     let expr = self.parse_expr()?;
                     self.lexer.expect(Token::Semicolon)?;
 
                     result.push(Stmt::Print(expr));
                 }
+
+                // Ok(Token::KReturn)
 
                 Ok(other) => {
                     panic!("Wtf is {:?}", other);

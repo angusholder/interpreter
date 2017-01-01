@@ -13,6 +13,8 @@ pub enum Token {
     KNull,
     KPrint,
     KWhile,
+    KFn,
+    KReturn,
 
     LBrace,
     RBrace,
@@ -211,6 +213,8 @@ impl<'a> Lexer<'a> {
                     "while" => KWhile,
                     "and" => KAnd,
                     "or" => KOr,
+                    "fn" => KFn,
+                    "return" => KReturn,
                     ident => Ident(ident.to_string()),
                 }
             }

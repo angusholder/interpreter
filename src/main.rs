@@ -70,8 +70,8 @@ fn main() {
             println!("locals: {:?}", compiled.local_names);
             println!("consts: {:?}", compiled.consts);
             println!("code:");
-            for op in compiled.code.iter() {
-                println!("  {:?}", op);
+            for (i, op) in compiled.code.iter().enumerate() {
+                println!("{:4 }  {:?}", i, op);
             }
         }
         "execute" => {

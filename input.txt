@@ -1,13 +1,15 @@
-// foo index
+fn foo() {
+    print "foo";
+}
+
 let i = 0;
-let s = "hello";
 
 // loop over [0,29]
 while i < 30 {
     if i % 15 == 0 {
         print "foobar";
     } else if i % 3 == 0 {
-        print "foo";
+        foo();
     } else if i % 5 == 0 {
         print "bar";
     } else {
@@ -17,7 +19,3 @@ while i < 30 {
     i = i + 1;
 }
 // end of program
-
-// if operator precedence works, this prints 17
-// otherwise it evals to (2+5)*3 = 21
-print 2+5*3;
