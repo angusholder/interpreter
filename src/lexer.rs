@@ -26,6 +26,7 @@ pub enum Token {
     Star,
     Percent,
     Slash,
+    Dot,
 
     Lt,
     LtEq,
@@ -34,7 +35,16 @@ pub enum Token {
     Eq,
     NotEq,
 
+    KAnd,
+    KOr,
+
     Assign,
+    PlusAssign,
+    MinusAssign,
+    StarAssign,
+    SlashAssign,
+    PercentAssign,
+
     Semicolon,
     Comma,
 
@@ -199,6 +209,8 @@ impl<'a> Lexer<'a> {
                     "null" => KNull,
                     "print" => KPrint,
                     "while" => KWhile,
+                    "and" => KAnd,
+                    "or" => KOr,
                     ident => Ident(ident.to_string()),
                 }
             }

@@ -48,6 +48,18 @@ pub enum Expr {
         kind: UnaryOpKind,
         child: Box<Expr>,
     },
+    Index {
+        left: Box<Expr>,
+        index: Box<Expr>,
+    },
+    Attr {
+        left: Box<Expr>,
+        ident: String,
+    },
+    FuncCall {
+        left: Box<Expr>,
+        args: Box<[Box<Expr>]>,
+    },
     Atom(Atom),
 }
 
@@ -64,7 +76,7 @@ pub enum Stmt {
     },
     Assign {
         kind: AssignKind,
-        ident: String,
+        left: Box<Expr>,
     },
     Block(Block),
     Expr(Box<Expr>),
@@ -124,7 +136,7 @@ impl<'a> Parser<'a> {
 
                     if self.lexer.matches(Token::Semicolon) {
                         result.push(Stmt::Assign {
-                            ident: ident,
+                            left: Box::new(Expr::Atom(Atom::Ident(ident))),
                             kind: AssignKind::Let,
                         })
                     } else {
@@ -133,24 +145,25 @@ impl<'a> Parser<'a> {
                         self.lexer.expect(Token::Semicolon)?;
 
                         result.push(Stmt::Assign {
-                            ident: ident,
+                            left: Box::new(Expr::Atom(Atom::Ident(ident))),
                             kind: AssignKind::LetAssign(expr),
                         });
                     }
                 }
 
                 Ok(Token::Ident(ident)) => {
+                    self.lexer.peeked = Some(Token::Ident(ident));
+                    let left = self.parse_expr_until(0)?;
                     if self.lexer.matches(Token::Assign) {
                         let expr = self.parse_expr()?;
                         self.lexer.expect(Token::Semicolon)?;
 
                         result.push(Stmt::Assign {
-                            ident: ident,
+                            left: left,
                             kind: AssignKind::Reassign(expr),
                         })
                     } else {
-                        let node = Box::new(Expr::Atom(Atom::Ident(ident)));
-                        self.parse_expr_with_initial_node(node)?;
+                        result.push(Stmt::Expr(left));
                     }
                 }
 
@@ -199,76 +212,12 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_expr_with_initial_node(&mut self, initial: Box<Expr>) -> CompileResult<Box<Expr>> {
-        use lexer::Token::*;
-        let mut root = initial;
-
-        loop {
-            let kind = match self.lexer.peek() {
-                Ok(&Plus) => BinOpKind::Add,
-                Ok(&Minus) => BinOpKind::Sub,
-                Ok(&Star) => BinOpKind::Mul,
-                Ok(&Percent) => BinOpKind::Rem,
-                Ok(&Slash) => BinOpKind::Div,
-
-                Ok(&Lt) => BinOpKind::Lt,
-                Ok(&LtEq) => BinOpKind::LtEq,
-                Ok(&Gt) => BinOpKind::Gt,
-                Ok(&GtEq) => BinOpKind::GtEq,
-                Ok(&Eq) => BinOpKind::Eq,
-                Ok(&NotEq) => BinOpKind::NotEq,
-
-                Ok(_) => return Ok(root),
-                Err(CompileError::EndOfStream) => return Ok(root),
-                Err(other) => {
-                    return Err(other);
-                }
-            };
-
-            self.lexer.next()?;
-
-            let right = self.parse_atom()?;
-
-            root = Box::new(Expr::BinOp {
-                kind: kind,
-                left: root,
-                right: right,
-            });
-        }
+    pub fn parse_expr_until(&mut self, min_rbp: i32) -> CompileResult<Box<Expr>> {
+        ::pratt::parse_expr_until(self, min_rbp)
     }
 
     pub fn parse_expr(&mut self) -> CompileResult<Box<Expr>> {
-        let initial = self.parse_atom()?;
-        self.parse_expr_with_initial_node(initial)
-    }
-
-    pub fn parse_atom(&mut self) -> CompileResult<Box<Expr>> {
-        let atom = match self.lexer.next()? {
-            Token::KTrue => Atom::Bool(true),
-            Token::KFalse => Atom::Bool(false),
-            Token::KNull => Atom::Null,
-            Token::Number(n) => Atom::Number(n),
-            Token::Ident(i) => Atom::Ident(i),
-            Token::StrLit(s) => Atom::String(s),
-
-            Token::Minus => {
-                let atom = self.parse_atom()?;
-                return Ok(Box::new(Expr::UnaryOp {
-                    kind: UnaryOpKind::Neg,
-                    child: atom
-                }));
-            }
-
-            Token::LParen => {
-                let expr = self.parse_expr()?;
-                self.lexer.expect(Token::RParen)?;
-                return Ok(expr);
-            }
-
-            _ => panic!(),//return Err(CompileError::Unimplemented),
-        };
-
-        Ok(Box::new(Expr::Atom(atom)))
+        self.parse_expr_until(0)
     }
 
     pub fn parse(&mut self) {

@@ -17,6 +17,7 @@ pub enum CompileError {
     TooManyConstants,
     InvalidStrLitEscape,
     UnterminatedStrLit,
+    UnexpectedNullToken(String),
 }
 
 pub type CompileResult<T> = Result<T, CompileError>;
@@ -151,7 +152,8 @@ impl<'a> Compiler<'a> {
 
     fn compile_stmt(&mut self, stmt: &Stmt) -> CompileResult<()> {
         match stmt {
-            &Stmt::Assign { ref kind, ref ident } => {
+            &Stmt::Assign { ref kind, ref left } => {
+                let ident = match left.as_ref() { &Expr::Atom(Atom::Ident(ref i)) => i, _ => unreachable!() };
                 match kind {
                     &AssignKind::Let => {
                         self.declare_local(ident)?;
@@ -267,6 +269,7 @@ impl<'a> Compiler<'a> {
                     }
                 }
             }
+            _ => {}
         }
 
         Ok(())

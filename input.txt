@@ -17,3 +17,7 @@ while i < 30 {
     i = i + 1;
 }
 // end of program
+
+// if operator precedence works, this prints 17
+// otherwise it evals to (2+5)*3 = 21
+print 2+5*3;

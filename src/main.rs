@@ -8,6 +8,7 @@ mod parser;
 mod value;
 mod compiler;
 mod virtual_machine;
+mod pratt;
 
 use lexer::Lexer;
 use parser::Parser;
